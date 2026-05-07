@@ -2,8 +2,8 @@
 """
 section_grid.py
 
-given length, tempo, meter, ostinato cycle length, and a recursive structure
-pattern, output a bar grid with timestamps for every section node in the tree.
+input length, tempo, meter, ostinato cycle length, and a recursive structure pattern
+output a bar grid with timestamps for every section node in the tree
 
 usage:
   python3 section_grid.py \
@@ -14,13 +14,14 @@ usage:
       --subsub "a=alpha beta,b=alpha beta gamma"  (lowercase to greek)
 
 output:
-  a tree view followed by a flat leaf list. each entry shows the node label,
-  its bar range, and its time range (m:ss to m:ss).
+  a tree view followed by a flat leaf list
+  each entry shows the node label, its bar range, and its time range (m:ss to m:ss)
 
 assumptions:
-  beats per bar = numerator of meter. seconds per bar = (60 / tempo) * beats_per_bar.
-  this assumes the meter denominator's note value receives the beat. the logic is
-  responsible for adjusting if a compound meter wants a different beat unit.
+  beats per bar = numerator of meter. 
+  seconds per bar = (60 / tempo) * beats_per_bar.
+  this assumes the meter denominator's note value receives the beat. 
+  the logic is responsible for adjusting if a compound meter wants a different beat unit.
 """
 
 import argparse
