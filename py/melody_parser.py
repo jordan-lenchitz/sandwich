@@ -2,9 +2,8 @@
 """
 melody_parser.py
 
-parse a melody from plain text, musical instrument digital interface, lilypond,
-or music extensible markup language. output a normalized note list with pitch
-class, octave, duration (quarter-note units), and cumulative start time.
+parse a melody 
+output a normalized note list with pitch class, octave, duration (quarter-note units), and cumulative start time
 
 usage:
   python3 melody_parser.py path/to/file.txt
