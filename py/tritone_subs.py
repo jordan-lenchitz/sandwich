@@ -2,9 +2,9 @@
 """
 tritone_subs.py
 
-given a chord (as a list of pitch class names), output candidate tritone
-substitution chords ranked by common tones with the original. used by the
-tritone-vamp-arranger logic in step 7 of the process.
+used in step 7 of logic.doc
+input a chord 
+output candidate tritone substitution chords ranked by common tones with the original
 
 usage:
   python3 tritone_subs.py "ab c eb g"
