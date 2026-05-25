@@ -1,16 +1,9 @@
-sandwich
+`sandwich :=` a little music theory cli with an emphasis on tritone subs
 
-music theory tools for the command line
+`melody parser :=` reads melodies and gives you note lists
 
-melody parser
-reads melodies and gives you note lists
+`section grid :=` builds song structures and bar counts
 
-section grid
-builds song structures and bar counts
+`tritone subs :=` finds candidate chord substitutions
 
-tritone subs
-finds candidate chord substitutions
-
-run them using python3 followed by the file name
-
-read the pdf for the theory paper
+read the pdf for my theory paper from 2017 :0
