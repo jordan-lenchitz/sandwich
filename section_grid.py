@@ -21,7 +21,6 @@ assumptions:
   beats per bar = numerator of meter. 
   seconds per bar = (60 / tempo) * beats_per_bar.
   this assumes the meter denominator's note value receives the beat. 
-  the logic is responsible for adjusting if a compound meter wants a different beat unit.
 """
 
 import argparse
@@ -129,7 +128,7 @@ def assign_bars(root: Node, total_bars: int, ostinato_bars: int) -> tuple[int, i
     distribute total_bars among leaves so that:
     - each leaf is an integer number of ostinato cycles (>= 1)
     - all occurrences of the same uppercase letter at the top level have
-      identical leaf bar counts (the "shape preserved" rule from the logic)
+      identical leaf bar counts (the "shape preserved" rule)
     - within an occurrence, sub-leaves get equal cycles (extras distributed
       to first leaves within the occurrence if not divisible)
     returns (actual_total_bars, mismatch) where mismatch = actual - requested.

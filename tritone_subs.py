@@ -2,7 +2,6 @@
 """
 tritone_subs.py
 
-used in step 7 of logic.doc
 input a chord 
 output candidate tritone substitution chords ranked by common tones with the original
 
