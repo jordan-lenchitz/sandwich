@@ -1,0 +1,16 @@
+sandwich
+
+music theory tools for the command line
+
+melody parser
+reads melodies and gives you note lists
+
+section grid
+builds song structures and bar counts
+
+tritone subs
+finds candidate chord substitutions
+
+run them using python3 followed by the file name
+
+read the pdf for the theory paper
