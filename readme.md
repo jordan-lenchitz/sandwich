@@ -4,11 +4,11 @@ a music theory cli with an emphasis on tritone subs and algorithmic forms :)
 
 ### how to use it
 
-* `sandwich.py parse`: reads melodies from midi, lilypond, musicxml, or just plain text.
-* `sandwich.py grid`: builds song structures based on recursion. preserves "shapes" across sections.
-* `sandwich.py subs`: find tritone substitutions for any chord. ranked by common tones.
-* `sandwich.py key`: tell it some notes and it'll guess the scale/key.
-* `sandwich.py harmonize`: give it a melody and it'll suggest some diatonic chords.
+* `sandwich.py parse`: reads melodies from midi, lilypond, musicxml, or just plain text
+* `sandwich.py grid`: builds song structures based on recursion; preserves "shapes" across sections
+* `sandwich.py subs`: finds tritone substitutions for any chord ranked by common tones
+* `sandwich.py key`: guesses the scale/key based on notes you provide
+* `sandwich.py harmonize`: suggests some chords based on melody you provide
 
 ### examples
 ```bash
