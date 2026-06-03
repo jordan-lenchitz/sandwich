@@ -13,13 +13,19 @@ now there's a main entry point called `sandwich.py`. it's way easier.
 
 ### examples
 ```bash
-# guess a key
+# 1. parse a melody (gives you a note list table)
+python3 sandwich.py parse "c4 d4 e4 f4 g4" --format text
+
+# 2. build a song grid (recursive structure)
+python3 sandwich.py grid --length-sec 240 --tempo 80 --meter 4/4 --top ABACABA --sub "A=aaba,B=aabc,C=aabc"
+
+# 3. guess a key
 python3 sandwich.py key "c d e f g a b"
 
-# get chords for a melody
+# 4. get chords for a melody (auto-harmonization)
 python3 sandwich.py harmonize "c4 d4 e4 f4 g4" --format text
 
-# still does the tritone stuff
+# 5. find tritone substitutions
 python3 sandwich.py subs "c e g bb"
 ```
 
