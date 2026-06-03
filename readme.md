@@ -1,39 +1,37 @@
 # sandwich 🥪
+a music theory toolkit with an emphasis on tritone subs and recursion
 
-a music theory toolkit with an emphasis on tritone subs and algorithmic structure. 
+### howto
 
-### how to use it
-now there's a main entry point called `sandwich.py`. it's way easier.
-
-* `sandwich.py parse`: reads melodies from midi, lilypond, musicxml, or just plain text.
-* `sandwich.py grid`: builds song structures based on recursion. preserves "shapes" across sections.
-* `sandwich.py subs`: find tritone substitutions for any chord. ranked by common tones.
-* `sandwich.py key`: tell it some notes and it'll guess the scale/key.
-* `sandwich.py harmonize`: give it a melody and it'll suggest some diatonic chords.
-* `sandwich.py generate`: procedurally build a whole song from a chordal vamp using 13 harmonic rules.
+* `sandwich.py parse` reads melodies from midi, lilypond, musicxml, or just plain text
+* `sandwich.py grid` builds song structures based on recursion and preserves "shapes" across sections
+* `sandwich.py subs` finds tritone substitutions for any chord ranked by common tones
+* `sandwich.py key` guesses the scale/key given some notes
+* `sandwich.py harmonize` suggests some diatonic chords given a melody
+* `sandwich.py generate` builds an entire song from a vamp of 4 to 8 chords that you supply
 
 ### examples
 ```bash
-# 1. parse a melody (gives you a note list table)
+# parse a melody into a note list table
 python3 sandwich.py parse "c4 d4 e4 f4 g4" --format text
 
-# 2. build a song grid (recursive structure)
+# build a song grid with recursive structure
 python3 sandwich.py grid --length-sec 240 --tempo 80 --meter 4/4 --top ABACABA --sub "A=aaba,B=aabc,C=aabc"
 
-# 3. guess a key
+# guess a key
 python3 sandwich.py key "c d e f g a b"
 
-# 4. get chords for a melody (auto-harmonization)
-python3 sandwich.py harmonize "c4 d4 e4 f4 g4" --format text
+# get chords for a melody 
+python3 sandwich.py harmonize "c4 e4 g4 a4" --format text
 
-# 5. find tritone substitutions
+# find tritone subs
 python3 sandwich.py subs "c e g bb"
 
-# 6. generate a full song from a vamp (pure python inference)
+# generate a song from a vamp using pure python inference
 python3 sandwich.py generate "ab c eb g | ab c d f | ab c eb g | ab c db f" --form ABACADAEADACABA
 ```
 
 ### why?
-read the pdf (`april-2017-paper-final.pdf`) for the deep theory behind it. i wrote it in 2017. 
+read the pdf (`april-2017-paper-final.pdf`) if you are curious about the state of music theory back in 2017!
 
-it's all python. keep it weird. :0
+100% python because let's keep it weird :0
