@@ -1,14 +1,16 @@
 # sandwich 🥪
 
-a music theory cli with an emphasis on tritone subs and algorithmic forms :)
+a music theory toolkit with an emphasis on tritone subs and algorithmic structure. 
 
 ### how to use it
+now there's a main entry point called `sandwich.py`. it's way easier.
 
-* `sandwich.py parse`: reads melodies from midi, lilypond, musicxml, or just plain text
-* `sandwich.py grid`: builds song structures based on recursion; preserves "shapes" across sections
-* `sandwich.py subs`: finds tritone substitutions for any chord ranked by common tones
-* `sandwich.py key`: guesses the scale/key based on notes you provide
-* `sandwich.py harmonize`: suggests some chords based on melody you provide
+* `sandwich.py parse`: reads melodies from midi, lilypond, musicxml, or just plain text.
+* `sandwich.py grid`: builds song structures based on recursion. preserves "shapes" across sections.
+* `sandwich.py subs`: find tritone substitutions for any chord. ranked by common tones.
+* `sandwich.py key`: tell it some notes and it'll guess the scale/key.
+* `sandwich.py harmonize`: give it a melody and it'll suggest some diatonic chords.
+* `sandwich.py generate`: procedurally build a whole song from a chordal vamp using 13 harmonic rules.
 
 ### examples
 ```bash
@@ -26,9 +28,12 @@ python3 sandwich.py harmonize "c4 d4 e4 f4 g4" --format text
 
 # 5. find tritone substitutions
 python3 sandwich.py subs "c e g bb"
+
+# 6. generate a full song from a vamp (pure python inference)
+python3 sandwich.py generate "ab c eb g | ab c d f | ab c eb g | ab c db f" --form ABACADAEADACABA
 ```
 
 ### why?
-read the pdf (`april-2017-paper-final.pdf`) for the deep theory behind it
+read the pdf (`april-2017-paper-final.pdf`) for the deep theory behind it. i wrote it in 2017. 
 
-all python because let's keep it weird! :0
+it's all python. keep it weird. :0
