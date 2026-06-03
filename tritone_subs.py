@@ -19,58 +19,7 @@ output:
 import argparse
 import sys
 
-# pitch class names. flats preferred for output spelling, but parsing accepts
-# both flats and sharps.
-NAMES_FLAT = ["c", "db", "d", "eb", "e", "f", "gb", "g", "ab", "a", "bb", "b"]
-NAMES_SHARP = ["c", "c#", "d", "d#", "e", "f", "f#", "g", "g#", "a", "a#", "b"]
-
-PARSE_MAP = {
-    "c": 0, "b#": 0, "dbb": 0,
-    "c#": 1, "db": 1,
-    "d": 2, "ebb": 2, "cx": 2,
-    "d#": 3, "eb": 3, "fbb": 3,
-    "e": 4, "fb": 4, "dx": 4,
-    "f": 5, "e#": 5, "gbb": 5,
-    "f#": 6, "gb": 6, "ex": 6,
-    "g": 7, "abb": 7, "fx": 7,
-    "g#": 8, "ab": 8,
-    "a": 9, "bbb": 9, "gx": 9,
-    "a#": 10, "bb": 10, "cbb": 10,
-    "b": 11, "cb": 11, "ax": 11,
-}
-
-# chord quality library: intervals from root in semitones.
-QUALITIES = {
-    "maj":      (0, 4, 7),
-    "min":      (0, 3, 7),
-    "dim":      (0, 3, 6),
-    "aug":      (0, 4, 8),
-    "sus2":     (0, 2, 7),
-    "sus4":     (0, 5, 7),
-    "maj7":     (0, 4, 7, 11),
-    "m7":       (0, 3, 7, 10),
-    "7":        (0, 4, 7, 10),
-    "m7b5":     (0, 3, 6, 10),
-    "dim7":     (0, 3, 6, 9),
-    "mmaj7":    (0, 3, 7, 11),
-    "augmaj7":  (0, 4, 8, 11),
-    "aug7":     (0, 4, 8, 10),
-    "7sus4":    (0, 5, 7, 10),
-    "6":        (0, 4, 7, 9),
-    "m6":       (0, 3, 7, 9),
-    "9":        (0, 4, 7, 10, 2),
-    "m9":       (0, 3, 7, 10, 2),
-    "maj9":     (0, 4, 7, 11, 2),
-    "quartal3": (0, 5, 10),
-    "quartal4": (0, 5, 10, 15 % 12),
-}
-
-
-def parse_pitch_class(token: str) -> int:
-    t = token.strip().lower()
-    if t in PARSE_MAP:
-        return PARSE_MAP[t]
-    raise ValueError(f"could not parse pitch class: {token!r}")
+from core import NAMES_FLAT, NAMES_SHARP, PARSE_MAP, QUALITIES, parse_pitch_class
 
 
 def parse_pitches(s: str) -> list[int]:

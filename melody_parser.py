@@ -33,21 +33,8 @@ import argparse
 import sys
 import os
 
-NAMES_FLAT = ["c", "db", "d", "eb", "e", "f", "gb", "g", "ab", "a", "bb", "b"]
-PARSE_MAP = {
-    "c": 0, "b#": 0, "dbb": 0,
-    "c#": 1, "db": 1,
-    "d": 2, "ebb": 2,
-    "d#": 3, "eb": 3,
-    "e": 4, "fb": 4,
-    "f": 5, "e#": 5,
-    "f#": 6, "gb": 6,
-    "g": 7, "abb": 7,
-    "g#": 8, "ab": 8,
-    "a": 9, "bbb": 9,
-    "a#": 10, "bb": 10,
-    "b": 11, "cb": 11,
-}
+from core import NAMES_FLAT, PARSE_MAP, format_duration
+
 DURATION_TAGS = {"w": 4.0, "h": 2.0, "q": 1.0, "e": 0.5, "s": 0.25, "t": 1.0 / 3}
 
 

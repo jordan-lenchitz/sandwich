@@ -4,28 +4,12 @@ section_grid.py
 
 input length, tempo, meter, ostinato cycle length, and a recursive structure pattern
 output a bar grid with timestamps for every section node in the tree
-
-usage:
-  python3 section_grid.py \
-      --length-sec 240 --tempo 80 --meter 5/4 --ostinato-bars 4 \
-      --top abacaba --sub "A=aaba,B=aabc,C=aabc"
-
-  optional deeper levels:
-      --subsub "a=alpha beta,b=alpha beta gamma"  (lowercase to greek)
-
-output:
-  a tree view followed by a flat leaf list
-  each entry shows the node label, its bar range, and its time range (m:ss to m:ss)
-
-assumptions:
-  beats per bar = numerator of meter. 
-  seconds per bar = (60 / tempo) * beats_per_bar.
-  this assumes the meter denominator's note value receives the beat. 
 """
 
 import argparse
 import sys
 from dataclasses import dataclass, field
+from core import format_duration as fmt_time
 
 GREEK_LOWER = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta"]
 ROMAN_NUMERALS = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii"]
@@ -85,11 +69,6 @@ def build_tree(
 ) -> Node:
     """
     build the recursive tree.
-    top: string of uppercase letters, e.g. "abacaba" (parsed as A B A C A B A).
-    subs: mapping uppercase letter (lowercase form) to sub-pattern string of
-          lowercase letters, e.g. {'A':'aaba'}.
-    subsubs: mapping lowercase letter to list of greek tokens (third level).
-    sub3s: mapping greek token to list of roman numeral tokens (fourth level).
     """
     root = Node(label="root", path="root")
     for top_letter in top:
@@ -125,13 +104,7 @@ def collect_leaves(node: Node) -> list[Node]:
 
 def assign_bars(root: Node, total_bars: int, ostinato_bars: int) -> tuple[int, int]:
     """
-    distribute total_bars among leaves so that:
-    - each leaf is an integer number of ostinato cycles (>= 1)
-    - all occurrences of the same uppercase letter at the top level have
-      identical leaf bar counts (the "shape preserved" rule)
-    - within an occurrence, sub-leaves get equal cycles (extras distributed
-      to first leaves within the occurrence if not divisible)
-    returns (actual_total_bars, mismatch) where mismatch = actual - requested.
+    distribute total_bars among leaves.
     """
     leaves = collect_leaves(root)
     if not leaves:
@@ -148,25 +121,18 @@ def assign_bars(root: Node, total_bars: int, ostinato_bars: int) -> tuple[int, i
             raise ValueError(
                 f"shape mismatch: letter {L} has occurrences with different "
                 f"leaf counts ({K_by_letter[L]} vs {len(leaves_here)}). "
-                f"the 'shape preserved' rule requires equal sub-pattern shapes."
             )
         K_by_letter[L] = len(leaves_here)
         occurrences_by_letter.setdefault(L, []).append(top_node)
     N_by_letter = {L: len(v) for L, v in occurrences_by_letter.items()}
 
-    # solve: find cycles_per_leaf[L] >= 1 (integer) such that
-    # sum(N[L] * K[L] * cpl[L]) == total_cycles, or as close as possible.
+    # solve: find cycles_per_leaf[L] >= 1
     cpl: dict[str, int] = {L: 1 for L in N_by_letter}
     weight: dict[str, int] = {L: N_by_letter[L] * K_by_letter[L] for L in N_by_letter}
     current = sum(weight[L] * cpl[L] for L in cpl)
     if current > total_cycles:
-        raise ValueError(
-            f"not enough cycles ({total_cycles}) to give every leaf at least 1 cycle "
-            f"(minimum needed: {current}). increase length, reduce ostinato cycle size, "
-            f"or reduce recursion depth."
-        )
-    # greedy: add one cpl at a time to the letter whose weight fits without overshoot,
-    # preferring smallest-weight letters for finer granularity.
+        raise ValueError(f"not enough cycles ({total_cycles})")
+    
     sorted_letters = sorted(weight, key=lambda L: weight[L])
     while current < total_cycles:
         added = False
@@ -178,9 +144,9 @@ def assign_bars(root: Node, total_bars: int, ostinato_bars: int) -> tuple[int, i
                 break
         if not added:
             break
-    mismatch = current - total_cycles  # 0 if exact, negative if undershoot
+    mismatch = current - total_cycles
 
-    # assign bars to leaves; within an occurrence, give equal cycles to each leaf
+    # assign bars to leaves
     bar_cursor = 0
     for top_node in root.children:
         L = top_node.label
@@ -215,14 +181,6 @@ def bar_to_seconds(bar: int, sec_per_bar: float) -> float:
     return bar * sec_per_bar
 
 
-def fmt_time(sec: float) -> str:
-    m = int(sec // 60)
-    s = sec - m * 60
-    if abs(s - round(s)) < 1e-6:
-        return f"{m}:{int(round(s)):02d}"
-    return f"{m}:{s:05.2f}"
-
-
 def render_tree(root: Node, sec_per_bar: float, indent: int = 0, lines: list[str] | None = None) -> list[str]:
     if lines is None:
         lines = []
@@ -254,13 +212,13 @@ def render_leaves(root: Node, sec_per_bar: float) -> list[str]:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--length-sec", type=float, required=True)
-    ap.add_argument("--tempo", type=float, required=True, help="beats per minute")
-    ap.add_argument("--meter", required=True, help="e.g. 5/4 or 7/8")
-    ap.add_argument("--ostinato-bars", type=int, default=4, help="number of bars per ostinato cycle")
-    ap.add_argument("--top", required=True, help="top-level pattern string, e.g. abacaba")
-    ap.add_argument("--sub", default="", help="sub assignments, e.g. A=aaba,B=aabc,C=aabc")
-    ap.add_argument("--subsub", default="", help="third-level assignments, e.g. a=alpha beta,b=alpha beta gamma")
-    ap.add_argument("--sub3", default="", help="fourth-level assignments, e.g. alpha=i ii,beta=i ii iii")
+    ap.add_argument("--tempo", type=float, required=True)
+    ap.add_argument("--meter", required=True)
+    ap.add_argument("--ostinato-bars", type=int, default=4)
+    ap.add_argument("--top", required=True)
+    ap.add_argument("--sub", default="")
+    ap.add_argument("--subsub", default="")
+    ap.add_argument("--sub3", default="")
     args = ap.parse_args()
 
     bps, _denom = parse_meter(args.meter)
@@ -279,23 +237,10 @@ def main() -> int:
         return 2
 
     print(f"# section grid")
-    print()
-    print(f"length: {args.length_sec} seconds · tempo: {args.tempo} bpm · meter: {args.meter}")
-    print(f"seconds per bar: {sec_per_bar:.4f} · target bars: {total_bars} · "
-          f"actual bars: {actual_bars} · ostinato cycle: {args.ostinato_bars} bars")
-    if bar_mismatch != 0:
-        actual_sec = actual_bars * sec_per_bar
-        print(f"note: actual length is {actual_sec:.2f} seconds "
-              f"({bar_mismatch:+d} bars vs target). nudge tempo to land on target.")
+    print(f"actual bars: {actual_bars}")
     print()
     print("## tree")
-    print()
     for line in render_tree(root, sec_per_bar):
-        print(line)
-    print()
-    print("## leaves")
-    print()
-    for line in render_leaves(root, sec_per_bar):
         print(line)
     return 0
 
