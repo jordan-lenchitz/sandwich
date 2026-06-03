@@ -1,6 +1,6 @@
 # sandwich 🥪
 
-a music theory cli with an emphasis on tritone subs and algorithmic forms :)
+a music theory cli with an emphasis on tritone subs and recursive forms :)
 
 ### how to use it
 
@@ -12,19 +12,19 @@ a music theory cli with an emphasis on tritone subs and algorithmic forms :)
 
 ### examples
 ```bash
-# 1. parse a melody (gives you a note list table)
+# parse a melody into a note list table
 python3 sandwich.py parse "c4 d4 e4 f4 g4" --format text
 
-# 2. build a song grid (recursive structure)
+# build a song grid with recursive forms
 python3 sandwich.py grid --length-sec 240 --tempo 80 --meter 4/4 --top ABACABA --sub "A=aaba,B=aabc,C=aabc"
 
-# 3. guess a key
+# guess a key
 python3 sandwich.py key "c d e f g a b"
 
-# 4. get chords for a melody (auto-harmonization)
+# get chords for a melody 
 python3 sandwich.py harmonize "c4 d4 e4 f4 g4" --format text
 
-# 5. find tritone substitutions
+# find tritone subs
 python3 sandwich.py subs "c e g bb"
 ```
 
