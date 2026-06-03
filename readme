@@ -1,9 +1,0 @@
-`sandwich :=` a little music theory cli with an emphasis on tritone subs
-
-`melody parser :=` reads melodies and gives you note lists
-
-`section grid :=` builds song structures and bar counts
-
-`tritone subs :=` finds candidate chord substitutions
-
-read the pdf for my theory paper from 2017 :0
