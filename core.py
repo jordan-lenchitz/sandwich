@@ -59,6 +59,27 @@ def name_pitch(pc: int, prefer_sharps: bool = False) -> str:
     """Return the name of a pitch class."""
     return NAMES_SHARP[pc % 12] if prefer_sharps else NAMES_FLAT[pc % 12]
 
+def parse_chord(s: str) -> set[int]:
+    """Parse a space or comma separated chord string into a set of pitch classes."""
+    if "," in s:
+        tokens = [t for t in s.split(",") if t.strip()]
+    else:
+        tokens = s.split()
+    return set(parse_pitch_class(t) for t in tokens)
+
+def parse_vamp(s: str) -> list[set[int]]:
+    """Parse a vamp string (chords separated by '|') into a list of pitch class sets."""
+    if "|" in s:
+        chunks = s.split("|")
+    else:
+        # fallback to comma if no pipes
+        chunks = s.split(",")
+    return [parse_chord(c.strip()) for c in chunks if c.strip()]
+
+def name_pitch_set(pcs: set[int]) -> str:
+    """Return a flat-spelled, sorted string of pitch class names."""
+    return " ".join(NAMES_FLAT[p] for p in sorted(pcs))
+
 # Scale library: intervals from root
 SCALES = {
     "major":            (0, 2, 4, 5, 7, 9, 11),

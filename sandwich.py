@@ -51,6 +51,11 @@ def main():
     harm_parser.add_argument("input", help="File path or quoted text")
     harm_parser.add_argument("--format", choices=["text", "midi", "lilypond", "musicxml"])
 
+    # Generate subcommand
+    gen_parser = subparsers.add_parser("generate", help="Procedurally generate a song from a vamp")
+    gen_parser.add_argument("vamp", help="Vamp chords (separated by | or ,)")
+    gen_parser.add_argument("--form", default="ABAB", help="Song form (e.g. ABACADA)")
+
     args = parser.parse_args()
 
     if args.command == "parse":
@@ -110,6 +115,29 @@ def main():
         print("|---|---|---|---|")
         for r in results:
             print(f"| {r['start']:.2f} | {r['melody_note']} | {r['chord']} | {r['roman']} |")
+        return 0
+
+    elif args.command == "generate":
+        from core import parse_vamp, name_pitch_set
+        from generator import generate_song
+        
+        try:
+            vamp_pcs = parse_vamp(args.vamp)
+            song = generate_song(vamp_pcs, args.form)
+            
+            print(f"# Generated Song: {args.form}")
+            print()
+            for entry in song:
+                print(f"## Section {entry['section']}")
+                print(f"*Applied Rules:* {', '.join(entry['rules'])}")
+                print("| Bar | Chords |")
+                print("|---|---|")
+                for i, chord_pcs in enumerate(entry['vamp']):
+                    print(f"| {i+1} | {name_pitch_set(chord_pcs)} |")
+                print()
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
         return 0
 
 if __name__ == "__main__":
