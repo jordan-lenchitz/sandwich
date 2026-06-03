@@ -1,9 +1,8 @@
 # sandwich 🥪
 
-a music theory toolkit with an emphasis on tritone subs and algorithmic structure. 
+a music theory cli with an emphasis on tritone subs and algorithmic forms :)
 
 ### how to use it
-now there's a main entry point called `sandwich.py`. it's way easier.
 
 * `sandwich.py parse`: reads melodies from midi, lilypond, musicxml, or just plain text.
 * `sandwich.py grid`: builds song structures based on recursion. preserves "shapes" across sections.
@@ -24,6 +23,6 @@ python3 sandwich.py subs "c e g bb"
 ```
 
 ### why?
-read the pdf (`april-2017-paper-final.pdf`) for the deep theory behind it. i wrote it in 2017. 
+read the pdf (`april-2017-paper-final.pdf`) for the deep theory behind it
 
-it's all python. keep it weird. :0
+all python because let's keep it weird! :0
