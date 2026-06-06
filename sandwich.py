@@ -50,11 +50,24 @@ def main():
     harm_parser = subparsers.add_parser("harmonize", help="Suggest chords for a melody")
     harm_parser.add_argument("input", help="File path or quoted text")
     harm_parser.add_argument("--format", choices=["text", "midi", "lilypond", "musicxml"])
+    harm_parser.add_argument("--voicing", choices=["closed", "drop2", "drop3", "smooth"], help="Voicing style")
 
     # Generate subcommand
     gen_parser = subparsers.add_parser("generate", help="Procedurally generate a song from a vamp")
     gen_parser.add_argument("vamp", help="Vamp chords (separated by | or ,)")
     gen_parser.add_argument("--form", default="ABAB", help="Song form (e.g. ABACADA)")
+    gen_parser.add_argument("--voicing", choices=["closed", "drop2", "drop3", "smooth"], help="Voicing style")
+    gen_parser.add_argument("--rhythm", choices=["four-on-the-floor", "bossa", "swing", "waltz"], help="Rhythmic pattern")
+
+    # Negative subcommand
+    neg_parser = subparsers.add_parser("negative", help="Perform negative harmony transformation")
+    neg_parser.add_argument("input", help="Pitches (space or comma separated) or melody text")
+    neg_parser.add_argument("--key", required=True, help="Key root (e.g. C, G, Eb)")
+
+    # Modulate subcommand
+    mod_parser = subparsers.add_parser("modulate", help="Suggest paths for modulating between keys")
+    mod_parser.add_argument("from_key", help="Starting key (e.g. C major)")
+    mod_parser.add_argument("to_key", help="Target key (e.g. G major)")
 
     args = parser.parse_args()
 
@@ -87,7 +100,7 @@ def main():
         return 0
 
     elif args.command == "harmonize":
-        from core import harmonize
+        from core import harmonize, generate_voicing, optimize_voice_leading, name_voicing
         from melody_parser import parse_text, detect_format, parse_midi, parse_lilypond, parse_musicxml
         
         notes = []
@@ -109,16 +122,39 @@ def main():
             print("error: no notes found to harmonize", file=sys.stderr)
             return 2
         
-        results = harmonize(notes)
         print("# Suggested Harmonization")
-        print("| Start | Note | Chord | Roman |")
-        print("|---|---|---|---|")
-        for r in results:
-            print(f"| {r['start']:.2f} | {r['melody_note']} | {r['chord']} | {r['roman']} |")
+        if args.voicing:
+            print(f"*Voicing Style:* {args.voicing}")
+            print("| Start | Note | Chord | Roman | Voicing |")
+            print("|---|---|---|---|---|")
+            
+            from core import detect_key, get_diatonic_chords
+            pcs = [n["pc"] for n in notes]
+            best_key = detect_key(pcs)[0]
+            diatonic = get_diatonic_chords(best_key["root"], best_key["scale"])
+            
+            prev_voicing = []
+            for i, note in enumerate(notes):
+                candidates = [c for c in diatonic if note["pc"] in c["pcs"]]
+                chosen = candidates[0] if candidates else diatonic[0]
+                
+                if args.voicing == "smooth":
+                    voicing = optimize_voice_leading(prev_voicing, chosen["pcs"])
+                else:
+                    voicing = generate_voicing(chosen["pcs"], style=args.voicing)
+                
+                prev_voicing = voicing
+                print(f"| {note['start']:.2f} | {note['name']} | {chosen['name']} | {chosen['roman']} | {name_voicing(voicing)} |")
+        else:
+            results = harmonize(notes)
+            print("| Start | Note | Chord | Roman |")
+            print("|---|---|---|---|")
+            for r in results:
+                print(f"| {r['start']:.2f} | {r['melody_note']} | {r['chord']} | {r['roman']} |")
         return 0
 
     elif args.command == "generate":
-        from core import parse_vamp, name_pitch_set
+        from core import parse_vamp, name_pitch_set, generate_voicing, optimize_voice_leading, name_voicing, RHYTHMS
         from generator import generate_song
         
         try:
@@ -126,15 +162,80 @@ def main():
             song = generate_song(vamp_pcs, args.form)
             
             print(f"# Generated Song: {args.form}")
+            if args.voicing:
+                print(f"*Voicing Style:* {args.voicing}")
+            if args.rhythm:
+                print(f"*Rhythmic Pattern:* {args.rhythm}")
             print()
+            
+            prev_voicing = []
             for entry in song:
                 print(f"## Section {entry['section']}")
                 print(f"*Applied Rules:* {', '.join(entry['rules'])}")
-                print("| Bar | Chords |")
-                print("|---|---|")
+                
+                cols = ["Bar", "Chords"]
+                if args.voicing: cols.append("Voicing")
+                if args.rhythm: cols.append("Rhythm (Offsets)")
+                
+                print(f"| {' | '.join(cols)} |")
+                print(f"| {' | '.join(['---']*len(cols))} |")
+                
                 for i, chord_pcs in enumerate(entry['vamp']):
-                    print(f"| {i+1} | {name_pitch_set(chord_pcs)} |")
+                    row = [f"{i+1}", name_pitch_set(chord_pcs)]
+                    
+                    if args.voicing == "smooth":
+                        voicing = optimize_voice_leading(prev_voicing, chord_pcs)
+                    elif args.voicing:
+                        voicing = generate_voicing(chord_pcs, style=args.voicing)
+                    else:
+                        voicing = None
+                    
+                    if voicing:
+                        prev_voicing = voicing
+                        row.append(name_voicing(voicing))
+                    
+                    if args.rhythm:
+                        pattern = RHYTHMS[args.rhythm]
+                        row.append(", ".join(str(p[0]) for p in pattern))
+                        
+                    print(f"| {' | '.join(row)} |")
                 print()
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        return 0
+
+    elif args.command == "modulate":
+        from core import detect_key, suggest_modulation, parse_pitch_class
+        
+        try:
+            # Simple key parser: split into root and scale
+            def parse_key_str(s):
+                parts = s.split()
+                root = parse_pitch_class(parts[0])
+                scale = parts[1].lower() if len(parts) > 1 else "major"
+                return {"root": root, "scale": scale, "name": f"{parts[0]} {scale}"}
+            
+            k1 = parse_key_str(args.from_key)
+            k2 = parse_key_str(args.to_key)
+            
+            results = suggest_modulation(k1, k2)
+            
+            print(f"# Modulation: {k1['name']} -> {k2['name']}")
+            print()
+            print("## Pivot Chords")
+            if results["pivots"]:
+                print("| Chord | Function in Start Key | Function in Target Key |")
+                print("|---|---|---|")
+                for p in results["pivots"]:
+                    print(f"| {p['name']} | {p['roman_start']} | {p['roman_end']} |")
+            else:
+                print("No direct diatonic pivot chords found.")
+            
+            print()
+            print("## Dominant Approach")
+            print(f"Apply the dominant of the target key: **{results['target_v7']['name']}**")
+            
         except Exception as e:
             print(f"error: {e}", file=sys.stderr)
             return 2
