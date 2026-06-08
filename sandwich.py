@@ -205,6 +205,23 @@ def main():
             return 2
         return 0
 
+    elif args.command == "negative":
+        from core import negative_transform, parse_pitch_class, name_pitch
+        try:
+            root = parse_pitch_class(args.key)
+            raw_pitches = args.input.replace(",", " ").split()
+            pcs = [parse_pitch_class(p) for p in raw_pitches]
+            
+            neg_pcs = negative_transform(pcs, root)
+            
+            print(f"# Negative Harmony (Key: {args.key})")
+            print(f"**Original:** {' '.join(raw_pitches)}")
+            print(f"**Negative:** {' '.join(name_pitch(p) for p in neg_pcs)}")
+        except Exception as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        return 0
+
     elif args.command == "modulate":
         from core import detect_key, suggest_modulation, parse_pitch_class
         
