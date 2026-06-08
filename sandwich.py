@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-sandwich.py - Unified CLI for the sandwich music theory toolkit.
+sandwich.py is a unified CLI for the sandwich toolkit
 """
 
 import argparse
