@@ -143,12 +143,13 @@ async def run_command(command: str = Form(...)):
 
     try:
         # Run the command using subprocess
-        # Set PYTHONPATH to current dir so sandwich.py can find its modules
+        # Ensure we run sandwich.py from its own directory
+        script_dir = os.path.dirname(os.path.abspath(__file__))
         env = os.environ.copy()
-        env["PYTHONPATH"] = os.getcwd()
+        env["PYTHONPATH"] = script_dir
         
-        full_command = [sys.executable, "sandwich.py"] + parts
-        result = subprocess.run(full_command, capture_output=True, text=True, timeout=30, env=env)
+        full_command = [sys.executable, os.path.join(script_dir, "sandwich.py")] + parts
+        result = subprocess.run(full_command, capture_output=True, text=True, timeout=30, env=env, cwd=script_dir)
         output = result.stdout
         if result.stderr:
             output += "\\n--- Error Output ---\\n" + result.stderr
