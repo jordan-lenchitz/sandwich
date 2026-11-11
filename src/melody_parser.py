@@ -2,7 +2,7 @@
 """
 melody_parser.py
 
-parse a melody 
+parse a melody
 output a normalized note list with pitch class, octave, duration (quarter-note units), and cumulative start time
 
 usage:
@@ -11,31 +11,23 @@ usage:
   python3 melody_parser.py path/to/file.ly
   python3 melody_parser.py path/to/file.musicxml
   python3 melody_parser.py --format text "c4q d4q e4q f4q"
-  python3 melody_parser.py --format text "c d e f g a b"
+  python3 melody_parser.py "c4 d4 e4 f4 g4"
 
 format detection:
   by file extension (.txt, .midi/.mid, .ly/.lily/.lilypond, .xml/.musicxml/.mxl).
+  if input is not an existing file path, inline text/lilypond/xml is parsed automatically.
   override with --format {text, midi, lilypond, musicxml}.
-
-text input syntax (any of these):
-  bare pitches:           "c d e f g a b"
-  pitches with octave:    "c4 d4 e4 f4 g4"
-  with quarter-note tag:  "c4q d4q e4h f4w"  (q=1, h=2, w=4, e=0.5, s=0.25)
-  with explicit duration: "c4:1 d4:0.5 e4:0.5 f4:1"
-  use 'r' for rests:      "c4 r d4 e4"
-
-output:
-  a text table:
-    | i | pitch | octave | start (quarter notes) | duration | pitch class |
 """
 
 import argparse
-import sys
 import os
+import sys
+from typing import Optional
 
 from core import NAMES_FLAT, PARSE_MAP, format_duration
 
 DURATION_TAGS = {"w": 4.0, "h": 2.0, "q": 1.0, "e": 0.5, "s": 0.25, "t": 1.0 / 3}
+FILE_EXTENSIONS = {".txt", ".text", ".midi", ".mid", ".ly", ".lily", ".lilypond", ".xml", ".musicxml", ".mxl"}
 
 
 def parse_text(s: str) -> list[dict]:
@@ -47,8 +39,7 @@ def parse_text(s: str) -> list[dict]:
         tok = tok.strip().lower()
         if not tok:
             continue
-        if tok.startswith("r"):
-            # rest
+        if tok.startswith("r") and (len(tok) == 1 or tok[1] in DURATION_TAGS or tok[1] == ":" or tok[1:].isdigit()):
             dur = 1.0
             if ":" in tok:
                 dur = float(tok.split(":", 1)[1])
@@ -56,30 +47,37 @@ def parse_text(s: str) -> list[dict]:
                 dur = DURATION_TAGS[tok[1]]
             cursor += dur
             continue
-        # split duration if present
         if ":" in tok:
             pitch_part, dur_part = tok.split(":", 1)
             duration = float(dur_part)
         else:
-            # check for trailing duration tag
-            if tok and tok[-1] in DURATION_TAGS and len(tok) > 1 and tok[-2].isdigit():
-                duration = DURATION_TAGS[tok[-1]]
-                pitch_part = tok[:-1]
+            if tok and tok[-1] in DURATION_TAGS and len(tok) > 1 and (tok[-2].isdigit() or tok[:-1] in PARSE_MAP):
+                # Disambiguate pitch names ending in 'e' or 'b' (none in DURATION_TAGS: w, h, q, e, s, t)
+                # Wait: 'e' is both pitch E and eighth-note tag!
+                # Only treat trailing 'e' as eighth-note if preceded by a digit (e.g. c4e, e4e) or if pitch_part without it is valid and tok not in PARSE_MAP
+                if tok in PARSE_MAP:
+                    duration = 1.0
+                    pitch_part = tok
+                elif tok[-2].isdigit() or (tok[-1] != "e" and tok[:-1] in PARSE_MAP):
+                    duration = DURATION_TAGS[tok[-1]]
+                    pitch_part = tok[:-1]
+                else:
+                    duration = 1.0
+                    pitch_part = tok
             else:
                 duration = 1.0
                 pitch_part = tok
-        # split pitch and octave
-        # find where digits start
+
         octave = None
         i = 0
-        while i < len(pitch_part) and not pitch_part[i].isdigit():
+        while i < len(pitch_part) and not pitch_part[i].isdigit() and pitch_part[i] != "-":
             i += 1
         pitch_token = pitch_part[:i]
         if i < len(pitch_part):
             try:
                 octave = int(pitch_part[i:])
-            except ValueError:
-                pass
+            except ValueError as exc:
+                raise ValueError(f"could not parse octave in pitch: {pitch_part!r}") from exc
         if pitch_token not in PARSE_MAP:
             raise ValueError(f"could not parse pitch: {pitch_part!r}")
         pc = PARSE_MAP[pitch_token]
@@ -97,17 +95,16 @@ def parse_text(s: str) -> list[dict]:
 def parse_midi(path: str) -> list[dict]:
     try:
         import mido
-    except ImportError:
+    except ImportError as exc:
         raise RuntimeError(
             "musical instrument digital interface parsing requires the mido library. "
-            "install with: pip install mido --break-system-packages"
-        )
+            "install with: pip install mido"
+        ) from exc
     mid = mido.MidiFile(path)
     ticks_per_beat = mid.ticks_per_beat
     notes: list[dict] = []
     cursor_ticks = 0
     note_starts: dict[int, int] = {}
-    # use the first track that contains note_on events
     track = None
     for t in mid.tracks:
         for msg in t:
@@ -140,11 +137,7 @@ def parse_midi(path: str) -> list[dict]:
 
 
 def parse_lilypond(text: str) -> list[dict]:
-    """very basic lilypond note parser. handles c, d, e... with accidentals
-    (cis=c#, ces=cb, dis=d#, des=db, etc.), octave marks (c' c'' c, c,,) and
-    durations (c4 c8 c16 c2 c1). does not handle tuplets, ties, chords, or
-    grace notes - those are skipped or approximated. ignores backslash commands
-    like \\relative."""
+    """basic lilypond note parser."""
     import re
     LP_PITCH = {
         "c": 0, "cis": 1, "des": 1, "d": 2, "dis": 3, "ees": 3, "es": 3,
@@ -153,17 +146,10 @@ def parse_lilypond(text: str) -> list[dict]:
     }
     notes: list[dict] = []
     cursor = 0.0
-    # strip comments
     text = re.sub(r"%.*", "", text)
-    # if there's a music block, skip everything before the first opening brace
-    # (this discards \relative c' style metadata that would otherwise be parsed
-    # as notes)
     if "{" in text:
         text = text[text.find("{"):]
-    # strip backslash commands: \word
     text = re.sub(r"\\[a-zA-Z]+", " ", text)
-    # require notes to be preceded by whitespace, start of string, or { | <
-    # and followed by whitespace, end, or duration digits/octave marks
     pattern = re.compile(
         r"(?:(?<=\s)|(?<=\{)|(?<=\|)|(?<=<)|^)"
         r"(?P<pitch>[a-h](?:is|es|s)?)"
@@ -177,7 +163,6 @@ def parse_lilypond(text: str) -> list[dict]:
             continue
         pc = LP_PITCH[pitch_tok]
         octs = m.group("oct") or ""
-        # base octave for unmarked pitches is octave 3 in lilypond convention
         octave = 3 + octs.count("'") - octs.count(",")
         dur_tok = m.group("dur") or "4"
         if dur_tok.endswith("."):
@@ -197,11 +182,13 @@ def parse_lilypond(text: str) -> list[dict]:
     return notes
 
 
-def parse_musicxml(path: str) -> list[dict]:
+def parse_musicxml(path_or_xml: str, is_inline: bool = False) -> list[dict]:
     import xml.etree.ElementTree as ET
-    tree = ET.parse(path)
-    root = tree.getroot()
-    # find divisions per quarter note (default 1)
+    if is_inline:
+        root = ET.fromstring(path_or_xml)
+    else:
+        tree = ET.parse(path_or_xml)
+        root = tree.getroot()
     divisions = 1
     div_el = root.find(".//divisions")
     if div_el is not None and div_el.text:
@@ -250,9 +237,53 @@ def detect_format(path: str) -> str:
     return "text"
 
 
+def _looks_like_filepath(s: str) -> bool:
+    ext = os.path.splitext(s.strip())[1].lower()
+    return ext in FILE_EXTENSIONS or "/" in s or "\\" in s
+
+
+def load_melody(input_arg: str, fmt: Optional[str] = None) -> list[dict]:
+    """
+    Load and parse a melody from either a file path or an inline string.
+    Automatically handles inline text (e.g. 'c4 d4 e4 f4') even when --format is omitted.
+    """
+    if os.path.exists(input_arg):
+        resolved_fmt = fmt or detect_format(input_arg)
+        if resolved_fmt == "text":
+            with open(input_arg, "r", encoding="utf-8") as f:
+                return parse_text(f.read())
+        elif resolved_fmt == "midi":
+            return parse_midi(input_arg)
+        elif resolved_fmt == "lilypond":
+            with open(input_arg, "r", encoding="utf-8") as f:
+                return parse_lilypond(f.read())
+        elif resolved_fmt == "musicxml":
+            return parse_musicxml(input_arg)
+        else:
+            raise ValueError(f"unknown format {resolved_fmt}")
+
+    # Not an existing file on disk: check if it looks like a missing file path vs inline content
+    if fmt == "midi" or (fmt is None and _looks_like_filepath(input_arg)):
+        raise FileNotFoundError(f"file not found: {input_arg}")
+
+    resolved_fmt = fmt or "text"
+    if resolved_fmt == "text":
+        return parse_text(input_arg)
+    elif resolved_fmt == "lilypond":
+        return parse_lilypond(input_arg)
+    elif resolved_fmt == "musicxml":
+        if input_arg.strip().startswith("<"):
+            return parse_musicxml(input_arg, is_inline=True)
+        raise FileNotFoundError(f"file not found: {input_arg}")
+    else:
+        raise FileNotFoundError(f"file not found: {input_arg}")
+
+
 def render(notes: list[dict]) -> str:
-    lines = ["| i | pitch | octave | start (quarter notes) | duration | pitch class |",
-             "|---|---|---|---|---|---|"]
+    lines = [
+        "| i | pitch | octave | start (quarter notes) | duration | pitch class |",
+        "|---|---|---|---|---|---|",
+    ]
     for i, n in enumerate(notes):
         oct_str = str(n["octave"]) if n["octave"] is not None else "-"
         lines.append(
@@ -261,62 +292,48 @@ def render(notes: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("input", help="file path, or quoted text if --format text and not a file")
-    ap.add_argument("--format", choices=["text", "midi", "lilypond", "musicxml"], default=None)
-    args = ap.parse_args()
-
-    if args.format == "text" and not os.path.exists(args.input):
-        # treat the argument as inline text
-        try:
-            notes = parse_text(args.input)
-        except ValueError as e:
-            print(f"error: {e}", file=sys.stderr)
-            return 2
-    else:
-        if not os.path.exists(args.input):
-            print(f"error: file not found: {args.input}", file=sys.stderr)
-            return 2
-        fmt = args.format or detect_format(args.input)
-        try:
-            if fmt == "text":
-                with open(args.input, "r", encoding="utf-8") as f:
-                    notes = parse_text(f.read())
-            elif fmt == "midi":
-                notes = parse_midi(args.input)
-            elif fmt == "lilypond":
-                with open(args.input, "r", encoding="utf-8") as f:
-                    notes = parse_lilypond(f.read())
-            elif fmt == "musicxml":
-                notes = parse_musicxml(args.input)
-            else:
-                print(f"error: unknown format {fmt}", file=sys.stderr)
-                return 2
-        except RuntimeError as e:
-            print(f"error: {e}", file=sys.stderr)
-            return 2
-        except Exception as e:
-            print(f"error parsing {fmt}: {e}", file=sys.stderr)
-            return 2
-
-    print(f"# parsed melody")
-    print()
-    print(f"note count: {len(notes)}")
+def format_parsed_melody(notes: list[dict]) -> str:
+    lines = ["# parsed melody", "", f"note count: {len(notes)}"]
     if notes:
         total_dur = max(n["start"] + n["duration"] for n in notes)
-        print(f"total duration: {total_dur:.3f} quarter notes")
-        # pitch class histogram for ostinato derivation
+        lines.append(f"total duration: {total_dur:.3f} quarter notes")
         pc_counts: dict[int, float] = {}
         for n in notes:
             pc_counts[n["pc"]] = pc_counts.get(n["pc"], 0.0) + n["duration"]
         ranked = sorted(pc_counts.items(), key=lambda kv: -kv[1])
-        print(f"pitch class weight (by total duration):")
+        lines.append("pitch class weight (by total duration):")
         for pc, w in ranked[:6]:
-            print(f"  {NAMES_FLAT[pc]}: {w:.2f}")
-    print()
-    print(render(notes))
+            lines.append(f"  {NAMES_FLAT[pc]}: {w:.2f}")
+    lines.append("")
+    lines.append(render(notes))
+    return "\n".join(lines)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("input", help="file path, or inline melody text")
+    ap.add_argument("--format", choices=["text", "midi", "lilypond", "musicxml"], default=None)
+    return ap
+
+
+def run_from_args(args: argparse.Namespace) -> int:
+    try:
+        notes = load_melody(args.input, args.format)
+    except (ValueError, FileNotFoundError, RuntimeError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    except Exception as e:
+        print(f"error parsing {args.format or 'input'}: {e}", file=sys.stderr)
+        return 2
+
+    print(format_parsed_melody(notes))
     return 0
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    ap = build_parser()
+    args = ap.parse_args(argv)
+    return run_from_args(args)
 
 
 if __name__ == "__main__":

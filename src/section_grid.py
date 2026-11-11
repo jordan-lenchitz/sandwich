@@ -9,6 +9,7 @@ output a bar grid with timestamps for every section node in the tree
 import argparse
 import sys
 from dataclasses import dataclass, field
+from typing import Optional
 from core import format_duration as fmt_time
 
 GREEK_LOWER = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta"]
@@ -28,8 +29,13 @@ class Node:
 
 
 def parse_meter(s: str) -> tuple[int, int]:
-    n, d = s.split("/")
-    return int(n), int(d)
+    if "/" not in s:
+        raise ValueError(f"bad meter (expected N/D, e.g. 4/4): {s!r}")
+    n, d = s.split("/", 1)
+    num, den = int(n), int(d)
+    if num <= 0 or den <= 0:
+        raise ValueError(f"meter values must be positive: {s!r}")
+    return num, den
 
 
 def parse_kv_csv(s: str) -> dict[str, str]:
@@ -56,7 +62,6 @@ def parse_subsub(s: str) -> dict[str, list[str]]:
         if "=" not in chunk:
             raise ValueError(f"bad assignment: {chunk!r}")
         k, v = chunk.split("=", 1)
-        # values are space-separated greek tokens
         out[k.strip()] = [t for t in v.strip().split() if t]
     return out
 
@@ -64,14 +69,16 @@ def parse_subsub(s: str) -> dict[str, list[str]]:
 def build_tree(
     top: str,
     subs: dict[str, str],
-    subsubs: dict[str, list[str]] | None = None,
-    sub3s: dict[str, list[str]] | None = None,
+    subsubs: Optional[dict[str, list[str]]] = None,
+    sub3s: Optional[dict[str, list[str]]] = None,
 ) -> Node:
     """
     build the recursive tree.
     """
     root = Node(label="root", path="root")
     for top_letter in top:
+        if not top_letter.strip():
+            continue
         upper = top_letter.upper()
         node = Node(label=upper, path=f"{upper}")
         sub_pattern = subs.get(upper) or subs.get(top_letter)
@@ -104,14 +111,16 @@ def collect_leaves(node: Node) -> list[Node]:
 
 def assign_bars(root: Node, total_bars: int, ostinato_bars: int) -> tuple[int, int]:
     """
-    distribute total_bars among leaves.
+    distribute total_bars among leaves while preserving identical leaf counts/durations
+    for identical top-level section letters.
     """
+    if ostinato_bars <= 0:
+        raise ValueError("ostinato_bars must be positive")
     leaves = collect_leaves(root)
-    if not leaves:
+    if not leaves or root.is_leaf():
         return 0, 0
     total_cycles = total_bars // ostinato_bars
 
-    # group top-level nodes by letter and verify equal leaf counts per letter
     occurrences_by_letter: dict[str, list[Node]] = {}
     K_by_letter: dict[str, int] = {}
     for top_node in root.children:
@@ -126,13 +135,18 @@ def assign_bars(root: Node, total_bars: int, ostinato_bars: int) -> tuple[int, i
         occurrences_by_letter.setdefault(L, []).append(top_node)
     N_by_letter = {L: len(v) for L, v in occurrences_by_letter.items()}
 
-    # solve: find cycles_per_leaf[L] >= 1
     cpl: dict[str, int] = {L: 1 for L in N_by_letter}
     weight: dict[str, int] = {L: N_by_letter[L] * K_by_letter[L] for L in N_by_letter}
-    current = sum(weight[L] * cpl[L] for L in cpl)
-    if current > total_cycles:
-        raise ValueError(f"not enough cycles ({total_cycles})")
-    
+    min_cycles_needed = sum(weight[L] * cpl[L] for L in cpl)
+
+    # If the default/requested ostinato_bars is too large to fit min_cycles_needed into total_bars,
+    # step down ostinato_bars (e.g. 4 -> 2 -> 1) so the structure fits the requested length.
+    effective_ostinato = ostinato_bars
+    while effective_ostinato > 1 and (total_bars // effective_ostinato) < min_cycles_needed:
+        effective_ostinato -= 1
+    total_cycles = total_bars // effective_ostinato
+    current = min_cycles_needed
+
     sorted_letters = sorted(weight, key=lambda L: weight[L])
     while current < total_cycles:
         added = False
@@ -144,21 +158,18 @@ def assign_bars(root: Node, total_bars: int, ostinato_bars: int) -> tuple[int, i
                 break
         if not added:
             break
-    mismatch = current - total_cycles
 
-    # assign bars to leaves
     bar_cursor = 0
     for top_node in root.children:
         L = top_node.label
         leaves_here = collect_leaves(top_node)
         for leaf in leaves_here:
             cycles = cpl[L]
-            bars = cycles * ostinato_bars
+            bars = cycles * effective_ostinato
             leaf.start_bar = bar_cursor
             leaf.end_bar = bar_cursor + bars
             bar_cursor += bars
 
-    # propagate up
     def propagate(n: Node) -> tuple[int, int]:
         if n.is_leaf():
             return n.start_bar, n.end_bar
@@ -170,6 +181,7 @@ def assign_bars(root: Node, total_bars: int, ostinato_bars: int) -> tuple[int, i
         n.start_bar = min(starts)
         n.end_bar = max(ends)
         return n.start_bar, n.end_bar
+
     propagate(root)
 
     actual_total_bars = bar_cursor
@@ -181,7 +193,7 @@ def bar_to_seconds(bar: int, sec_per_bar: float) -> float:
     return bar * sec_per_bar
 
 
-def render_tree(root: Node, sec_per_bar: float, indent: int = 0, lines: list[str] | None = None) -> list[str]:
+def render_tree(root: Node, sec_per_bar: float, indent: int = 0, lines: Optional[list[str]] = None) -> list[str]:
     if lines is None:
         lines = []
     if root.label != "root":
@@ -209,7 +221,7 @@ def render_leaves(root: Node, sec_per_bar: float) -> list[str]:
     return out
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--length-sec", type=float, required=True)
     ap.add_argument("--tempo", type=float, required=True)
@@ -219,30 +231,47 @@ def main() -> int:
     ap.add_argument("--sub", default="")
     ap.add_argument("--subsub", default="")
     ap.add_argument("--sub3", default="")
-    args = ap.parse_args()
+    return ap
 
-    bps, _denom = parse_meter(args.meter)
-    sec_per_bar = (60.0 / args.tempo) * bps
-    total_bars = round(args.length_sec / sec_per_bar)
 
-    subs = parse_kv_csv(args.sub) if args.sub else {}
-    subsubs = parse_subsub(args.subsub) if args.subsub else None
-    sub3s = parse_subsub(args.sub3) if args.sub3 else None
-
-    root = build_tree(args.top, subs, subsubs, sub3s)
+def run_from_args(args: argparse.Namespace) -> int:
     try:
+        if args.tempo <= 0 or args.length_sec <= 0:
+            raise ValueError("tempo and length-sec must be positive")
+        bps, denom = parse_meter(args.meter)
+        # Account for denominator relative to quarter note (tempo in BPM = quarter notes per minute)
+        sec_per_bar = (60.0 / args.tempo) * bps * (4.0 / denom)
+        total_bars = round(args.length_sec / sec_per_bar)
+
+        subs = parse_kv_csv(args.sub) if args.sub else {}
+        subsubs = parse_subsub(args.subsub) if args.subsub else None
+        sub3s = parse_subsub(args.sub3) if args.sub3 else None
+
+        root = build_tree(args.top, subs, subsubs, sub3s)
         actual_bars, bar_mismatch = assign_bars(root, total_bars, args.ostinato_bars)
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
 
-    print(f"# section grid")
-    print(f"actual bars: {actual_bars}")
+    actual_dur = fmt_time(bar_to_seconds(actual_bars, sec_per_bar))
+    target_dur = fmt_time(args.length_sec)
+    print("# section grid")
+    print(f"target bars: {total_bars} ({target_dur}) | actual bars: {actual_bars} ({actual_dur}) | delta: {bar_mismatch:+d} bars")
     print()
     print("## tree")
     for line in render_tree(root, sec_per_bar):
         print(line)
+    print()
+    print("## leaf breakdown")
+    for line in render_leaves(root, sec_per_bar):
+        print(line)
     return 0
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    ap = build_parser()
+    args = ap.parse_args(argv)
+    return run_from_args(args)
 
 
 if __name__ == "__main__":
